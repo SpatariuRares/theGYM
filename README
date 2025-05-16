@@ -126,7 +126,6 @@ Questo script genera un grafico lineare che mostra l'andamento del volume nel te
             }
         });
         ```
-    * **Dashboard (Opzionale):** Crea una nota "00 Dashboard Allenamento.md" con query Dataview più generali o link ai tuoi grafici e tabelle preferiti per una visione d'insieme.
 
 ## Requisiti Plugin Obsidian
 
