@@ -50,14 +50,9 @@ await dv.view("theGYM/Scripts/ExerciseLogTable", {
 ### grafico
 
 ```dataviewjs
-// Definisci i parametri (opzionali)
-const input = {
-    // title: "Trend Volume Esercizio",
-    // height: "250px",
-    // showTrend: true,
-    // showStats: true,
-    // exercisePath: "theGYM/Esercizi/Panca Piana.md" // Solo se vuoi visualizzare un esercizio diverso
-};
+const  input = {
+        debug: true, // ← IMPORTANTE: per vedere tutti i dettagli
+    }
 
 // Passa il container esplicitamente quando usi dv.view
 await dv.view("theGYM/Scripts/VolumeChartTemplate", {
