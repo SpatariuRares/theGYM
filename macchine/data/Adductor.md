@@ -1,5 +1,5 @@
 ---
-nome: Leg adductor
+nome: Adductor
 marca: Tecnogym
 tipo_peso: pacco pesi
 tags: 

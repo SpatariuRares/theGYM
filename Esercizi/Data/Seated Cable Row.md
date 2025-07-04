@@ -1,25 +1,18 @@
 ---
-nome_esercizio: Pullover Machine
+nome_esercizio: Seated Cable Row
 tags:
-  - spalle
-  - deltoidi
-  - deltoidi
-  - laterali
+  - petto
+  - pettorale
   - isolamento
-  - macchina
+  - flessibilità
+  - cavi
 ---
 
 # Descrizione
 
 
 # Tecnica di Esecuzione
-
-
-
-# Note di Sicurezza
-
--
-
+ 
 # Log delle Performance
 
 ```dataviewjs

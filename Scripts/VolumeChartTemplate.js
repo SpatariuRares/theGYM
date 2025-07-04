@@ -1,7 +1,7 @@
 /*
 --------------------------------------------------------------------------------
 SCRIPT: VolumeChartTemplate.js
-VERSIONE: 1.3 (17 Maggio 2025)
+VERSIONE: 1.4 (17 Maggio 2025)
 AUTORE: Gemini & Rares
 DESCRIZIONE:
 Questo script DataviewJS genera un grafico dell'andamento del volume per un singolo
@@ -122,7 +122,12 @@ ESEMPI DI UTILIZZO:
 --------------------------------------------------------------------------------
 */
 
-// Utility function to safely get dv API, params and container
+// ===================== UTILITY FUNCTIONS =====================
+// (Raggruppate per chiarezza, con commenti)
+
+/**
+ * Ottiene l'ambiente di esecuzione dello script (container, parametri, dv)
+ */
 function getScriptEnvironment(inputFromView, dvGlobal) {
   const container = Object.prototype.hasOwnProperty.call(this, "container")
     ? this.container // For dv.script
@@ -130,16 +135,16 @@ function getScriptEnvironment(inputFromView, dvGlobal) {
     ? inputFromView.container // For dv.view from JS
     : dvGlobal.container; // For dv.view from markdown
 
-  if (container) {
-      container.innerHTML = ''; // Explicitly clear container
-  } else {
+  if (!container) {
       console.error("Errore critico: 'container' non è disponibile. Impossibile eseguire lo script.");
       return null;
   }
 
+  container.innerHTML = ''; // Explicitly clear container
+
   const userProvidedParams = (inputFromView && inputFromView.input) ? inputFromView.input : (inputFromView || {});
-  
-  console.log("--- CARICAMENTO VolumeChartTemplate.js - VERSIONE 1.3 (17 Maggio 2025 - Refactored) ---");
+
+  console.log("--- CARICAMENTO VolumeChartTemplate.js - VERSIONE 1.4 (17 Maggio 2025 - Enhanced) ---");
   console.log("Parametri ricevuti da dv.view (variabile 'input' grezza):", inputFromView);
   console.log("Parametri EFFETTIVI dell'utente:", userProvidedParams);
 
@@ -147,12 +152,42 @@ function getScriptEnvironment(inputFromView, dvGlobal) {
 }
 
 /**
-* Initializes configuration based on user parameters.
-* @param {object} params - User-provided parameters.
-* @param {object} dv - Dataview API.
-* @returns {object} Configuration object.
-*/
+ * Valida i parametri utente e restituisce errori se presenti
+ */
+function validateUserParams(params) {
+  const errors = [];
+
+  // Validazione chartType
+  if (params.chartType && !["exercise", "workout"].includes(params.chartType)) {
+    errors.push(`chartType deve essere "exercise" o "workout", ricevuto: "${params.chartType}"`);
+  }
+
+  // Validazione limit
+  if (params.limit !== undefined) {
+    const limit = parseInt(params.limit);
+    if (isNaN(limit) || limit < 1 || limit > 1000) {
+      errors.push(`limit deve essere un numero tra 1 e 1000, ricevuto: "${params.limit}"`);
+    }
+  }
+
+  // Validazione height
+  if (params.height && !/^\d+px$/.test(params.height)) {
+    errors.push(`height deve essere nel formato "XXXpx", ricevuto: "${params.height}"`);
+  }
+
+  return errors;
+}
+
+/**
+ * Inizializza la configurazione a partire dai parametri utente
+ */
 function initializeConfig(params, dv) {
+  // Validazione parametri
+  const validationErrors = validateUserParams(params);
+  if (validationErrors.length > 0) {
+    throw new Error(`Parametri non validi:\n${validationErrors.join('\n')}`);
+  }
+
   const config = {};
   config.chartType = params.chartType || "exercise";
   config.specificExercisePath = params.exercisePath;
@@ -165,18 +200,17 @@ function initializeConfig(params, dv) {
   config.customHeight = params.height || "250px";
   config.showTrendHeader = params.showTrend !== false;
   config.showStatsBox = params.showStats !== false;
-  
+
   console.log(`Modalità Chart Type Selezionata: ${config.chartType}`);
   return config;
 }
 
+// ===================== DATA FETCHING =====================
+
 /**
-* Fetches and filters log data based on the chart type.
-* @param {object} dv - Dataview API.
-* @param {object} config - Configuration object.
-* @returns {{pages: Array, titlePrefix: string}} Filtered pages and title prefix.
-*/
-function fetchData(dv, config) {
+ * Recupera e filtra i dati di log in base al tipo di grafico richiesto
+ */
+function fetchLogPagesAndTitle(dv, config) {
   let pages;
   let titlePrefix = "";
   let targetPath;
@@ -184,10 +218,12 @@ function fetchData(dv, config) {
   if (config.chartType === "workout") {
       targetPath = config.specificWorkoutPath || config.currentPagePath;
       if (!targetPath) {
-          console.error("Errore: Impossibile determinare targetPath per il workout.");
-          return { pages: [], titlePrefix: "Errore Workout" };
+          throw new Error("Impossibile determinare il percorso del workout. Specifica 'workoutPath' o esegui lo script da una nota di allenamento.");
       }
       const workoutPage = dv.page(targetPath);
+      if (!workoutPage) {
+          throw new Error(`Workout non trovato: "${targetPath}". Verifica che il file esista.`);
+      }
       titlePrefix = workoutPage?.file?.name?.replace(/\.md$/, "") || "Allenamento Corrente";
       pages = dv
           .pages(config.logFolderPath)
@@ -198,10 +234,12 @@ function fetchData(dv, config) {
   } else { // Default to "exercise"
       targetPath = config.specificExercisePath || config.currentPagePath;
       if (!targetPath) {
-          console.error("Errore: Impossibile determinare targetPath per l'esercizio.");
-          return { pages: [], titlePrefix: "Errore Esercizio" };
+          throw new Error("Impossibile determinare il percorso dell'esercizio. Specifica 'exercisePath' o esegui lo script da una nota di esercizio.");
       }
       const exercisePage = dv.page(targetPath);
+      if (!exercisePage) {
+          throw new Error(`Esercizio non trovato: "${targetPath}". Verifica che il file esista.`);
+      }
       titlePrefix = exercisePage?.nome_esercizio || exercisePage?.file?.name?.replace(/\.md$/, "") || "Esercizio Corrente";
       pages = dv
           .pages(config.logFolderPath)
@@ -210,15 +248,14 @@ function fetchData(dv, config) {
           .limit(config.limitPages || 50);
       console.log(`Chart Type: Exercise. Target Path: ${targetPath}. Titolo Prefix: ${titlePrefix}. Pagine di log trovate: ${pages.length}`);
   }
-  return { pages, titlePrefix, targetPath }; // Added targetPath to return
+  return { pages, titlePrefix, targetPath };
 }
 
+// ===================== DATA PROCESSING =====================
+
 /**
-* Formats a date input into DD/MM string.
-* @param {object|string} luxonDateInput - Date input (Luxon DateTime, ISO string, ctime object, JS Date).
-* @param {object} dv - Dataview API (for dv.luxon).
-* @returns {string} Formatted date string or "Invalid Date"/"No Date".
-*/
+ * Formatta una data in stringa GG/MM
+ */
 function formatDate(luxonDateInput, dv) {
   if (!luxonDateInput) return "No Date";
   let luxonDate;
@@ -248,17 +285,19 @@ function formatDate(luxonDateInput, dv) {
 }
 
 /**
-* Aggregates volumes by day.
-* @param {Array} logPages - Array of log page objects from Dataview.
-* @param {object} dv - Dataview API (for dv.luxon).
-* @returns {{labels: Array<string>, volumeData: Array<number>}} Sorted labels and corresponding volume data.
-*/
+ * Aggrega i volumi per giorno (ottimizzato)
+ */
 function aggregateDailyVolumes(logPages, dv) {
-  const dailyVolumes = {};
+  const dailyVolumes = new Map(); // Usa Map per performance migliore
+  let skippedPages = 0;
+  let invalidVolumePages = 0;
+  let invalidDatePages = 0;
+
   logPages.forEach((page) => {
       const volumeValue = page.Volume;
       if (volumeValue === undefined || volumeValue === null || volumeValue === '' || isNaN(parseFloat(String(volumeValue).replace(",", ".")))) {
           console.warn(`Pagina ${page.file.path} saltata: Volume mancante, vuoto o non numerico (Volume: '${volumeValue}').`);
+          invalidVolumePages++;
           return;
       }
       const numericVolume = parseFloat(String(volumeValue).replace(",", "."));
@@ -266,69 +305,82 @@ function aggregateDailyVolumes(logPages, dv) {
       const dateKeySource = page.DataOra || page.file.ctime;
       if (!dateKeySource) {
           console.warn(`Pagina ${page.file.path} saltata: DataOra e file.ctime mancanti.`);
+          invalidDatePages++;
           return;
       }
       const dateKey = formatDate(dateKeySource, dv);
       if (dateKey === "Invalid Date" || dateKey === "No Date") {
           console.warn(`Pagina ${page.file.path} saltata: data non valida ('${dateKeySource}') per l'aggregazione del volume.`);
+          invalidDatePages++;
           return;
       }
-      dailyVolumes[dateKey] = (dailyVolumes[dateKey] || 0) + numericVolume;
-  });
-  console.log("Volumi giornalieri aggregati:", dailyVolumes);
 
-  const labels = Object.keys(dailyVolumes).sort((a, b) => {
+      dailyVolumes.set(dateKey, (dailyVolumes.get(dateKey) || 0) + numericVolume);
+  });
+
+  // Log statistiche di elaborazione
+  if (skippedPages > 0 || invalidVolumePages > 0 || invalidDatePages > 0) {
+    console.log(`Statistiche elaborazione: ${logPages.length} pagine totali, ${invalidVolumePages} con volume invalido, ${invalidDatePages} con data invalida`);
+  }
+
+  console.log("Volumi giornalieri aggregati:", Object.fromEntries(dailyVolumes));
+
+  const labels = Array.from(dailyVolumes.keys()).sort((a, b) => {
       const [dayA, monthA] = a.split("/").map(Number);
       const [dayB, monthB] = b.split("/").map(Number);
       if (monthA !== monthB) return monthA - monthB;
       return dayA - dayB;
   });
-  const volumeData = labels.map((date) => dailyVolumes[date]);
+  const volumeData = labels.map((date) => dailyVolumes.get(date));
   return { labels, volumeData };
 }
 
 /**
-* Calculates trendline data using linear regression.
-* @param {Array<number>} volumeData - Array of volume data.
-* @returns {{trendlineData: Array<number>, slope: number, intercept: number}}
-*/
+ * Calcola la trendline tramite regressione lineare (ottimizzato)
+ */
 function calculateTrend(volumeData) {
   if (volumeData.length < 2) {
       return { trendlineData: [...volumeData], slope: 0, intercept: volumeData.length === 1 ? volumeData[0] : 0 };
   }
+
   const n = volumeData.length;
   const indices = Array.from({ length: n }, (_, i) => i);
-  const sumX = indices.reduce((a, b) => a + b, 0);
-  const sumY = volumeData.reduce((a, b) => a + b, 0);
-  const sumXY = indices.reduce((a, i) => a + i * volumeData[i], 0);
-  const sumXX = indices.reduce((a, i) => a + i * i, 0);
+
+  // Calcoli ottimizzati con reduce
+  const { sumX, sumY, sumXY, sumXX } = indices.reduce((acc, i) => {
+    acc.sumX += i;
+    acc.sumY += volumeData[i];
+    acc.sumXY += i * volumeData[i];
+    acc.sumXX += i * i;
+    return acc;
+  }, { sumX: 0, sumY: 0, sumXY: 0, sumXX: 0 });
+
   const denominator = (n * sumXX - sumX * sumX);
 
   let slope = 0;
   let intercept = 0;
-  if (denominator !== 0) {
+  if (Math.abs(denominator) > 1e-10) { // Evita divisione per zero con tolleranza numerica
       slope = (n * sumXY - sumX * sumY) / denominator;
       intercept = (sumY - slope * sumX) / n;
-  } else { // Degenerate case (e.g., all x values are the same, unlikely here)
-      intercept = n > 0 ? sumY / n : 0; // Average if n > 0
+  } else {
+      intercept = sumY / n; // Media se tutti i valori x sono uguali
   }
+
   const trendlineData = indices.map((i) => intercept + slope * i);
   return { trendlineData, slope, intercept };
 }
 
 /**
-* Determines trend direction, color, and icon.
-* @param {number} slope - The slope of the trendline.
-* @param {Array<number>} volumeData - Array of volume data.
-* @returns {{trendDirection: string, trendColor: string, trendIcon: string}}
-*/
+ * Restituisce indicatori di trend (direzione, colore, icona)
+ */
 function getTrendIndicators(slope, volumeData) {
-  const averageVolume = volumeData.length > 0 ? volumeData.reduce((a, b) => a + b, 0) / volumeData.length : 1;
-  const slopeThreshold = 0.05 * averageVolume; // Dynamic threshold (5% of average volume)
-
   if (volumeData.length < 2) {
       return { trendDirection: "dati insuff.", trendColor: "var(--text-muted)", trendIcon: "·" };
   }
+
+  const averageVolume = volumeData.reduce((a, b) => a + b, 0) / volumeData.length;
+  const slopeThreshold = Math.max(0.05 * averageVolume, 1); // Minimo 1 kg di soglia
+
   if (slope > slopeThreshold) {
       return { trendDirection: "in aumento", trendColor: "var(--color-green)", trendIcon: "↗️" };
   } else if (slope < -slopeThreshold) {
@@ -338,15 +390,89 @@ function getTrendIndicators(slope, volumeData) {
   }
 }
 
+// ===================== RENDERING =====================
+
 /**
-* Renders the trend header.
-* @param {HTMLElement} parentDiv - The parent div to append the header to.
-* @param {object} trendIndicators - Object with trendDirection, trendColor, trendIcon.
-* @param {Array<number>} volumeData - Array of volume data for calculating percentage change.
-*/
+ * Renderizza un messaggio di errore con stile
+ */
+function renderErrorMessage(container, message, details = null) {
+  const errorDiv = container.createEl("div", { cls: "volume-chart-error" });
+  Object.assign(errorDiv.style, {
+    padding: "20px",
+    margin: "10px 0",
+    backgroundColor: "var(--background-modifier-error)",
+    border: "1px solid var(--color-red)",
+    borderRadius: "8px",
+    color: "var(--text-error)",
+    textAlign: "center"
+  });
+
+  errorDiv.innerHTML = `<strong>❌ Errore:</strong> ${message}`;
+
+  if (details) {
+    const detailsDiv = errorDiv.createEl("div");
+    Object.assign(detailsDiv.style, {
+      marginTop: "10px",
+      fontSize: "0.9em",
+      color: "var(--text-muted)"
+    });
+    detailsDiv.innerHTML = details;
+  }
+}
+
+/**
+ * Renderizza un messaggio informativo con stile
+ */
+function renderInfoMessage(container, message, type = "info") {
+  const infoDiv = container.createEl("div", { cls: "volume-chart-info" });
+  const colors = {
+    info: { bg: "var(--background-modifier-border)", border: "var(--text-muted)", icon: "ℹ️" },
+    warning: { bg: "var(--background-modifier-warning)", border: "var(--color-orange)", icon: "⚠️" },
+    success: { bg: "var(--background-modifier-success)", border: "var(--color-green)", icon: "✅" }
+  };
+
+  const colorScheme = colors[type] || colors.info;
+
+  Object.assign(infoDiv.style, {
+    padding: "15px",
+    margin: "10px 0",
+    backgroundColor: colorScheme.bg,
+    border: `1px solid ${colorScheme.border}`,
+    borderRadius: "6px",
+    textAlign: "center",
+    fontSize: "0.95em"
+  });
+
+  infoDiv.innerHTML = `<strong>${colorScheme.icon}</strong> ${message}`;
+}
+
+/**
+ * Renderizza un indicatore di caricamento
+ */
+function renderLoadingIndicator(container) {
+  const loadingDiv = container.createEl("div", { cls: "volume-chart-loading" });
+  Object.assign(loadingDiv.style, {
+    padding: "20px",
+    textAlign: "center",
+    color: "var(--text-muted)"
+  });
+  loadingDiv.innerHTML = "⏳ Caricamento dati...";
+  return loadingDiv;
+}
+
+/**
+ * Renderizza l'header del trend
+ */
 function renderTrendHeader(parentDiv, trendIndicators, volumeData) {
   const trendHeader = parentDiv.createEl("div", { cls: "volume-chart-trend-header" });
-  Object.assign(trendHeader.style, { padding: "10px", marginBottom: "15px", backgroundColor: "var(--background-secondary)", borderRadius: "5px", textAlign: "center" });
+  Object.assign(trendHeader.style, {
+    padding: "12px",
+    marginBottom: "15px",
+    backgroundColor: "var(--background-secondary)",
+    borderRadius: "8px",
+    textAlign: "center",
+    border: "1px solid var(--background-modifier-border)"
+  });
 
   let firstValue, lastValue, percentChange = "N/A";
   if (volumeData.length >= 2) {
@@ -354,27 +480,41 @@ function renderTrendHeader(parentDiv, trendIndicators, volumeData) {
       lastValue = volumeData[volumeData.length - 1];
       percentChange = firstValue !== 0 ? (((lastValue - firstValue) / Math.abs(firstValue)) * 100).toFixed(1) : (lastValue > 0 ? "Infinity" : "0.0");
   } else if (volumeData.length === 1) {
-      firstValue = volumeData[0]; percentChange = "0.0";
+      firstValue = volumeData[0];
+      percentChange = "0.0";
   }
 
   let variationText = "N/A";
   if (volumeData.length >= 2) {
-      variationText = `<span style="color:${trendIndicators.trendColor};font-weight:bold">${percentChange === "Infinity" ? "Aumento signif." : (parseFloat(percentChange) > 0 ? "+" : "") + percentChange + "%"}</span> (da ${firstValue.toFixed(1)} kg a ${lastValue.toFixed(1)} kg)`;
+      const changeSign = parseFloat(percentChange) > 0 ? "+" : "";
+      variationText = `<span style="color:${trendIndicators.trendColor};font-weight:bold">${percentChange === "Infinity" ? "Aumento signif." : changeSign + percentChange + "%"}</span> (da ${firstValue.toFixed(1)} kg a ${lastValue.toFixed(1)} kg)`;
   } else if (volumeData.length === 1) {
       variationText = `(Volume: ${firstValue.toFixed(1)} kg)`;
   }
-  trendHeader.innerHTML = `<h3 style="margin:0;color:${trendIndicators.trendColor};font-size:1.1em;">${trendIndicators.trendIcon} Trend Volume: <strong>${trendIndicators.trendDirection}</strong></h3><p style="margin:5px 0 0 0;font-size:0.9em;">Variazione Complessiva: ${variationText}</p>`;
+
+  trendHeader.innerHTML = `
+    <h3 style="margin:0;color:${trendIndicators.trendColor};font-size:1.1em;">
+      ${trendIndicators.trendIcon} Trend Volume: <strong>${trendIndicators.trendDirection}</strong>
+    </h3>
+    <p style="margin:5px 0 0 0;font-size:0.9em;">
+      Variazione Complessiva: ${variationText}
+    </p>
+  `;
 }
 
 /**
-* Renders the chart or a fallback table.
-* @param {HTMLElement} parentDiv - The parent div for the chart.
-* @param {object} chartConfig - Configuration for the chart. (labels, volumeData, trendlineData, etc.)
-* @param {object} displaySettings - General display settings (finalChartTitle, customHeight, etc.)
-*/
+ * Renderizza il grafico o la tabella di fallback
+ */
 function renderChartOrTable(parentDiv, chartConfig, displaySettings) {
   const chartContainer = parentDiv.createEl("div");
-  Object.assign(chartContainer.style, { width: "100%", height: displaySettings.customHeight, marginBottom: "20px" });
+  Object.assign(chartContainer.style, {
+    width: "100%",
+    height: displaySettings.customHeight,
+    marginBottom: "20px",
+    border: "1px solid var(--background-modifier-border)",
+    borderRadius: "8px",
+    overflow: "hidden"
+  });
 
   setTimeout(() => {
       try {
@@ -384,140 +524,290 @@ function renderChartOrTable(parentDiv, chartConfig, displaySettings) {
                   labels: chartConfig.labels,
                   datasets: [{
                       label: `Volume ${displaySettings.chartType === "workout" ? "Totale Allenamento" : "Esercizio"} (kg)`,
-                      data: chartConfig.volumeData, borderColor: "rgb(75, 192, 192)", backgroundColor: "rgba(75, 192, 192, 0.2)",
-                      tension: 0.2, fill: true, pointRadius: 3, pointHoverRadius: 6,
-                      pointBackgroundColor: "rgb(75, 192, 192)", pointBorderColor: "rgb(255, 255, 255)",
-                      pointHoverBackgroundColor: "rgb(255, 255, 255)", pointHoverBorderColor: "rgb(75, 192, 192)",
+                      data: chartConfig.volumeData,
+                      borderColor: "rgb(75, 192, 192)",
+                      backgroundColor: "rgba(75, 192, 192, 0.2)",
+                      tension: 0.2,
+                      fill: true,
+                      pointRadius: 3,
+                      pointHoverRadius: 6,
+                      pointBackgroundColor: "rgb(75, 192, 192)",
+                      pointBorderColor: "rgb(255, 255, 255)",
+                      pointHoverBackgroundColor: "rgb(255, 255, 255)",
+                      pointHoverBorderColor: "rgb(75, 192, 192)",
                   }]
               },
               options: {
-                  responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  interaction: { mode: 'index', intersect: false },
                   plugins: {
-                      title: { display: true, text: displaySettings.finalChartTitle, font: { size: 16, weight: 'bold' }, padding: { top: 5, bottom: 15 } },
-                      legend: { display: true, position: "top", labels: { font: { size: 12 } } },
+                      title: {
+                        display: true,
+                        text: displaySettings.finalChartTitle,
+                        font: { size: 16, weight: 'bold' },
+                        padding: { top: 5, bottom: 15 }
+                      },
+                      legend: {
+                        display: true,
+                        position: "top",
+                        labels: { font: { size: 12 } }
+                      },
                       tooltip: {
-                          displayColors: false, backgroundColor: 'rgba(0,0,0,0.8)', titleFont: { size: 14, weight: 'bold' },
-                          bodyFont: { size: 12 }, padding: 10, cornerRadius: 4,
-                          callbacks: { label: (context) => `Volume: ${context.parsed.y.toFixed(1)} kg` }
+                          displayColors: false,
+                          backgroundColor: 'rgba(0,0,0,0.8)',
+                          titleFont: { size: 14, weight: 'bold' },
+                          bodyFont: { size: 12 },
+                          padding: 10,
+                          cornerRadius: 4,
+                          callbacks: {
+                            label: (context) => `Volume: ${context.parsed.y.toFixed(1)} kg`
+                          }
                       }
                   },
                   scales: {
-                      y: { beginAtZero: false, ticks: { font: { size: 11 } }, title: { display: true, text: 'Volume (kg)', font: { size: 12, weight: 'bold' } } },
-                      x: { ticks: { font: { size: 11 } }, title: { display: true, text: 'Data Sessione (GG/MM)', font: { size: 12, weight: 'bold' } } }
+                      y: {
+                        beginAtZero: false,
+                        ticks: { font: { size: 11 } },
+                        title: { display: true, text: 'Volume (kg)', font: { size: 12, weight: 'bold' } }
+                      },
+                      x: {
+                        ticks: { font: { size: 11 } },
+                        title: { display: true, text: 'Data Sessione (GG/MM)', font: { size: 12, weight: 'bold' } }
+                      }
                   }
               }
           };
 
           if (displaySettings.showTrendHeader && chartConfig.volumeData.length >= 2 && chartConfig.trendlineData.length === chartConfig.volumeData.length && Math.abs(chartConfig.slope) > 1e-9) {
               chartDataSetup.data.datasets.push({
-                  label: "Linea di Tendenza", data: chartConfig.trendlineData, borderColor: chartConfig.trendColor, borderWidth: 2,
-                  borderDash: [5, 5], fill: false, pointRadius: 0, tension: 0
+                  label: "Linea di Tendenza",
+                  data: chartConfig.trendlineData,
+                  borderColor: chartConfig.trendColor,
+                  borderWidth: 2,
+                  borderDash: [5, 5],
+                  fill: false,
+                  pointRadius: 0,
+                  tension: 0
               });
           }
 
           if (typeof window.renderChart === "function") {
               window.renderChart(chartDataSetup, chartContainer);
           } else {
-              const tableDiv = parentDiv.createEl("div", { cls: "volume-chart-table-fallback" });
-              tableDiv.style.overflow = "auto"; const table = tableDiv.createEl("table");
-              Object.assign(table.style, { width: "100%", borderCollapse: "collapse" });
-              const hr = table.createEl("thead").createEl("tr");
-              ["Data", "Volume (kg)"].forEach(txt => { const th = hr.createEl("th"); th.textContent = txt; Object.assign(th.style, { padding: "8px", borderBottom: "1px solid var(--background-modifier-border)", textAlign: "left" }); });
-              const tbody = table.createEl("tbody");
-              chartConfig.volumeData.forEach((v, i) => { const tr = tbody.createEl("tr"); [chartConfig.labels[i], v.toFixed(1)].forEach(txt => { const td = tr.createEl("td"); td.textContent = txt; Object.assign(td.style, { padding: "8px", borderBottom: "1px solid var(--background-modifier-border)" }); }); });
+              renderFallbackTable(parentDiv, chartConfig, displaySettings);
               chartContainer.style.display = "none";
-              tableDiv.createEl("p", { text: "Tabella (Plugin Charts non disp. o errore).", attr: { style: "text-align:center;color:var(--text-muted);font-size:0.8em;margin-top:10px;" } });
           }
       } catch (e) {
           console.error("Errore rendering grafico:", e);
-          parentDiv.innerHTML = "<p style='text-align:center;color:var(--text-error)'>Errore visualizzazione grafico.</p>";
+          renderErrorMessage(parentDiv, "Errore durante la visualizzazione del grafico.", e.message);
       }
   }, 200);
 }
 
 /**
-* Renders the statistics box.
-* @param {HTMLElement} parentDiv - The parent div to append the stats to.
-* @param {Array<string>} labels - Array of date labels.
-* @param {Array<number>} volumeData - Array of volume data.
-* @param {string} chartType - Type of chart ("exercise" or "workout").
-*/
+ * Renderizza la tabella di fallback quando il plugin Charts non è disponibile
+ */
+function renderFallbackTable(parentDiv, chartConfig, displaySettings) {
+  const tableDiv = parentDiv.createEl("div", { cls: "volume-chart-table-fallback" });
+  Object.assign(tableDiv.style, {
+    overflow: "auto",
+    border: "1px solid var(--background-modifier-border)",
+    borderRadius: "8px",
+    padding: "10px"
+  });
+
+  const table = tableDiv.createEl("table");
+  Object.assign(table.style, {
+    width: "100%",
+    borderCollapse: "collapse",
+    fontSize: "0.9em"
+  });
+
+  const thead = table.createEl("thead");
+  const headerRow = thead.createEl("tr");
+  ["Data", "Volume (kg)"].forEach(txt => {
+    const th = headerRow.createEl("th");
+    th.textContent = txt;
+    Object.assign(th.style, {
+      padding: "8px",
+      borderBottom: "2px solid var(--background-modifier-border)",
+      textAlign: "left",
+      fontWeight: "bold"
+    });
+  });
+
+  const tbody = table.createEl("tbody");
+  chartConfig.volumeData.forEach((v, i) => {
+    const tr = tbody.createEl("tr");
+    [chartConfig.labels[i], v.toFixed(1)].forEach(txt => {
+      const td = tr.createEl("td");
+      td.textContent = txt;
+      Object.assign(td.style, {
+        padding: "8px",
+        borderBottom: "1px solid var(--background-modifier-border)"
+      });
+    });
+  });
+
+  const infoDiv = tableDiv.createEl("div");
+  Object.assign(infoDiv.style, {
+    textAlign: "center",
+    color: "var(--text-muted)",
+    fontSize: "0.8em",
+    marginTop: "10px",
+    padding: "5px",
+    backgroundColor: "var(--background-secondary)",
+    borderRadius: "4px"
+  });
+  infoDiv.innerHTML = "📊 Tabella di fallback (Plugin Charts non disponibile o errore)";
+}
+
+/**
+ * Renderizza il box delle statistiche
+ */
 function renderStatsBox(parentDiv, labels, volumeData, chartType) {
   const statsDiv = parentDiv.createEl("div", { cls: "volume-chart-stats" });
-  Object.assign(statsDiv.style, { marginTop: "20px", padding: "15px", backgroundColor: "var(--background-secondary)", borderRadius: "5px", fontSize: "0.9em" });
+  Object.assign(statsDiv.style, {
+    marginTop: "20px",
+    padding: "15px",
+    backgroundColor: "var(--background-secondary)",
+    borderRadius: "8px",
+    fontSize: "0.9em",
+    border: "1px solid var(--background-modifier-border)"
+  });
 
   const avgVolume = (volumeData.reduce((s, v) => s + v, 0) / volumeData.length).toFixed(1);
-  const maxV = Math.max(...volumeData); const maxVolume = maxV.toFixed(1); const maxVolumeDate = labels[volumeData.indexOf(maxV)];
-  const minV = Math.min(...volumeData); const minVolume = minV.toFixed(1); const minVolumeDate = labels[volumeData.indexOf(minV)];
+  const maxV = Math.max(...volumeData);
+  const maxVolume = maxV.toFixed(1);
+  const maxVolumeDate = labels[volumeData.indexOf(maxV)];
+  const minV = Math.min(...volumeData);
+  const minVolume = minV.toFixed(1);
+  const minVolumeDate = labels[volumeData.indexOf(minV)];
   let recentTrendText = "N/A";
 
   if (volumeData.length >= 3) {
-      const recent = volumeData.slice(-3); const changeRecent = recent[2] - recent[0]; const changeRecentAbs = Math.abs(changeRecent).toFixed(1);
+      const recent = volumeData.slice(-3);
+      const changeRecent = recent[2] - recent[0];
+      const changeRecentAbs = Math.abs(changeRecent).toFixed(1);
       if (changeRecent > 0.05 * recent[0]) recentTrendText = `<span style="color:var(--color-green)">+${changeRecentAbs} kg</span> (ultime 3)`;
       else if (changeRecent < -0.05 * recent[0]) recentTrendText = `<span style="color:var(--color-red)">-${changeRecentAbs} kg</span> (ultime 3)`;
       else recentTrendText = "<span style='color:var(--color-orange)'>Stabile</span> (ultime 3)";
   } else if (volumeData.length === 2) {
-      const changeRecent = volumeData[1] - volumeData[0]; const changeRecentAbs = Math.abs(changeRecent).toFixed(1);
+      const changeRecent = volumeData[1] - volumeData[0];
+      const changeRecentAbs = Math.abs(changeRecent).toFixed(1);
       if (changeRecent > 0) recentTrendText = `<span style="color:var(--color-green)">+${changeRecentAbs} kg</span> (vs prec.)`;
       else if (changeRecent < 0) recentTrendText = `<span style="color:var(--color-red)">-${changeRecentAbs} kg</span> (vs prec.)`;
       else recentTrendText = "<span style='color:var(--color-orange)'>Invariato</span> (vs prec.)";
   }
-  statsDiv.innerHTML = `<strong style="font-size:1.1em;">Statistiche Volume (${chartType === "workout" ? "Totale Allenamento" : "Esercizio"}):</strong><ul style="margin-top:8px;margin-bottom:5px;list-style-type:square;padding-left:20px;"><li>Volume medio: <strong>${avgVolume} kg</strong></li><li>Max: <strong>${maxVolume} kg</strong> (${maxVolumeDate || 'N/D'})</li><li>Min: <strong>${minVolume} kg</strong> (${minVolumeDate || 'N/D'})</li><li>Sessioni: <strong>${labels.length}</strong></li>${recentTrendText !== "N/A" ? `<li>Trend Recente: ${recentTrendText}</li>` : ""}</ul>`;
+
+  statsDiv.innerHTML = `
+    <strong style="font-size:1.1em;">📈 Statistiche Volume (${chartType === "workout" ? "Totale Allenamento" : "Esercizio"}):</strong>
+    <ul style="margin-top:8px;margin-bottom:5px;list-style-type:square;padding-left:20px;">
+      <li>Volume medio: <strong>${avgVolume} kg</strong></li>
+      <li>Max: <strong>${maxVolume} kg</strong> (${maxVolumeDate || 'N/D'})</li>
+      <li>Min: <strong>${minVolume} kg</strong> (${minVolumeDate || 'N/D'})</li>
+      <li>Sessioni: <strong>${labels.length}</strong></li>
+      ${recentTrendText !== "N/A" ? `<li>Trend Recente: ${recentTrendText}</li>` : ""}
+    </ul>
+  `;
 }
 
-// --- Main Script Execution ---
-const env = getScriptEnvironment(input, dv); // 'input' is global from dv.view, 'dv' is global Dataview API
+// ===================== MAIN SCRIPT EXECUTION =====================
+
+const env = getScriptEnvironment(input, dv); // 'input' è globale da dv.view, 'dv' è Dataview API
 
 if (env) {
   const { dv, params, container } = env;
-  const config = initializeConfig(params, dv);
-  const { pages: logPages, titlePrefix, targetPath } = fetchData(dv, config); // targetPath is returned but not directly used below, good for debugging
 
-  const contentDiv = container.createEl("div"); // Main div for all content
+  try {
+    // Mostra indicatore di caricamento
+    const loadingDiv = renderLoadingIndicator(container);
 
-  if (logPages.length === 0 && config.chartType === "workout" && !config.specificWorkoutPath) {
-      // Special message if it's a workout chart on the current page and no logs found for THIS workout page
-       contentDiv.innerHTML =
-          `<p style='text-align:center;padding:20px;color:var(--text-muted)'>Nessun dato di volume trovato specificamente per le sessioni registrate come originate da <i>${titlePrefix}</i>.</p>` +
-          `<p style='text-align:center;font-size:0.8em;color:var(--text-muted)'>Assicurati che i tuoi file di log in '${config.logFolderPath}' abbiano un campo <code>Origine:: [[${titlePrefix}]]</code> corretto.</p>`;
-  } else if (logPages.length === 0 && config.chartType === "exercise" && !config.specificExercisePath) {
-      contentDiv.innerHTML =
-          `<p style='text-align:center;padding:20px;color:var(--text-muted)'>Nessun dato di volume trovato per l'esercizio <i>${titlePrefix}</i>.</p>` +
-          `<p style='text-align:center;font-size:0.8em;color:var(--text-muted)'>Assicurati che i tuoi file di log in '${config.logFolderPath}' abbiano un campo <code>Esercizio:: [[${titlePrefix}]]</code> corretto.</p>`;
-  } else {
+    const config = initializeConfig(params, dv);
+    const { pages: logPages, titlePrefix, targetPath } = fetchLogPagesAndTitle(dv, config);
+
+    // Rimuovi loading indicator
+    loadingDiv.remove();
+
+    const contentDiv = container.createEl("div"); // Div principale per il contenuto
+
+    // --- Gestione casi senza dati ---
+    if (logPages.length === 0) {
+      if (config.chartType === "workout" && !config.specificWorkoutPath) {
+        renderInfoMessage(contentDiv,
+          `Nessun dato di volume trovato per l'allenamento <strong>${titlePrefix}</strong>.`,
+          "warning"
+        );
+        renderInfoMessage(contentDiv,
+          `Assicurati che i tuoi file di log in '${config.logFolderPath}' abbiano un campo <code>Origine:: [[${titlePrefix}]]</code> corretto.`,
+          "info"
+        );
+      } else if (config.chartType === "exercise" && !config.specificExercisePath) {
+        renderInfoMessage(contentDiv,
+          `Nessun dato di volume trovato per l'esercizio <strong>${titlePrefix}</strong>.`,
+          "warning"
+        );
+        renderInfoMessage(contentDiv,
+          `Assicurati che i tuoi file di log in '${config.logFolderPath}' abbiano un campo <code>Esercizio:: [[${titlePrefix}]]</code> corretto.`,
+          "info"
+        );
+      } else {
+        renderInfoMessage(contentDiv,
+          `Nessun dato di volume trovato per <strong>${titlePrefix}</strong>.`,
+          "warning"
+        );
+      }
+    } else {
+      // --- Elaborazione e rendering dati ---
       const { labels, volumeData } = aggregateDailyVolumes(logPages, dv);
 
       if (volumeData.length === 0) {
-          contentDiv.innerHTML =
-              `<p style='text-align:center;padding:20px;color:var(--text-muted)'>Nessun dato di volume disponibile per ${titlePrefix}.</p>`;
-          if (logPages.length > 0) {
-              contentDiv.innerHTML += `<p style='text-align:center;font-size:0.8em;color:var(--text-warning)'>(${logPages.length} log trovati, ma nessuno con volume aggregabile. Controlla i campi DataOra/ctime o Volume.)</p>`;
-          }
+        renderInfoMessage(contentDiv,
+          `Nessun dato di volume disponibile per <strong>${titlePrefix}</strong>.`,
+          "warning"
+        );
+        if (logPages.length > 0) {
+          renderInfoMessage(contentDiv,
+            `${logPages.length} log trovati, ma nessuno con volume aggregabile. Controlla i campi DataOra/ctime o Volume.`,
+            "info"
+          );
+        }
       } else {
-          const { trendlineData, slope } = calculateTrend(volumeData);
-          const trendIndicators = getTrendIndicators(slope, volumeData);
+        const { trendlineData, slope } = calculateTrend(volumeData);
+        const trendIndicators = getTrendIndicators(slope, volumeData);
 
-          if (config.showTrendHeader) {
-              renderTrendHeader(contentDiv, trendIndicators, volumeData);
-          }
+        if (config.showTrendHeader) {
+          renderTrendHeader(contentDiv, trendIndicators, volumeData);
+        }
 
-          const finalChartTitle = config.chartTitle || `Trend Volume: ${titlePrefix}`;
-          const chartDisplayConfig = {
-              labels, volumeData, trendlineData, slope,
-              trendColor: trendIndicators.trendColor // Pass trendColor for the trendline dataset
-          };
-          const generalDisplaySettings = {
-              finalChartTitle,
-              customHeight: config.customHeight,
-              chartType: config.chartType,
-              showTrendHeader: config.showTrendHeader // To decide if trendline dataset is added
-          };
+        const finalChartTitle = config.chartTitle || `Trend Volume: ${titlePrefix}`;
+        const chartDisplayConfig = {
+          labels, volumeData, trendlineData, slope,
+          trendColor: trendIndicators.trendColor
+        };
+        const generalDisplaySettings = {
+          finalChartTitle,
+          customHeight: config.customHeight,
+          chartType: config.chartType,
+          showTrendHeader: config.showTrendHeader
+        };
 
-          renderChartOrTable(contentDiv, chartDisplayConfig, generalDisplaySettings);
+        renderChartOrTable(contentDiv, chartDisplayConfig, generalDisplaySettings);
 
-          if (config.showStatsBox) {
-              renderStatsBox(contentDiv, labels, volumeData, config.chartType);
-          }
+        if (config.showStatsBox) {
+          renderStatsBox(contentDiv, labels, volumeData, config.chartType);
+        }
+
+        // Messaggio di successo
+        renderInfoMessage(contentDiv,
+          `Grafico generato con successo! ${volumeData.length} sessioni elaborate.`,
+          "success"
+        );
       }
+    }
+  } catch (error) {
+    console.error("Errore durante l'esecuzione dello script:", error);
+    renderErrorMessage(container, "Errore durante l'esecuzione dello script.", error.message);
   }
 }
