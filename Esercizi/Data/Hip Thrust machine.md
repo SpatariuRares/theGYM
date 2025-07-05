@@ -1,5 +1,5 @@
 ---
-nome_esercizio: Hip thrust
+nome_esercizio: Hip thrust machine
 tags:
   - glutei
   - hamstring
@@ -7,10 +7,11 @@ tags:
   - macchina
 ---
 
+Macchina:: [[theGYM/macchine/data/hip trust machine.md|hip trust machine]]
 
 # Descrizione
 
-L'Hip thrust è un attrezzo specializzato progettato per eseguire l'Hip thrust , un esercizio focalizzato principalmente sul grande gluteo. A differenza dell'Hip thrust  tradizionale con bilanciere, la versione alla macchina offre un movimento guidato e un supporto ottimale per schiena e spalle, facilitando un'esecuzione corretta e riducendo il rischio di infortuni. Questo esercizio è considerato uno dei più efficaci per lo sviluppo della forza e dell'ipertrofia dei glutei, coinvolgendo anche secondariamente i muscoli ischiocrurali (hamstring), gli adduttori e gli stabilizzatori del core. La macchina permette un'esecuzione precisa del movimento di estensione dell'anca, consentendo di utilizzare carichi significativi in sicurezza senza la necessità di preparare e posizionare bilancieri e pesi.
+L'Hip thrust Machine Machine è un attrezzo specializzato progettato per eseguire l'Hip thrust Machine, un esercizio focalizzato principalmente sul grande gluteo. A differenza dell'Hip thrust Machine tradizionale con bilanciere, la versione alla macchina offre un movimento guidato e un supporto ottimale per schiena e spalle, facilitando un'esecuzione corretta e riducendo il rischio di infortuni. Questo esercizio è considerato uno dei più efficaci per lo sviluppo della forza e dell'ipertrofia dei glutei, coinvolgendo anche secondariamente i muscoli ischiocrurali (hamstring), gli adduttori e gli stabilizzatori del core. La macchina permette un'esecuzione precisa del movimento di estensione dell'anca, consentendo di utilizzare carichi significativi in sicurezza senza la necessità di preparare e posizionare bilancieri e pesi.
 
 # Tecnica di Esecuzione
 

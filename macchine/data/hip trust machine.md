@@ -8,13 +8,14 @@ tags:
   - forza
 ma:
 ---
+
 # Immagine
 
 ![[d526ef_427416e6418e4385b200e082b551a58c~mv2.jpeg]]
 
 # Descrizione
 
-La Hip Thrust Machine è un macchinario specificamente progettato per eseguire l'esercizio hip thrust in modo sicuro e controllato. È composta da una seduta imbottita, un supporto per la schiena inclinato, e una barra imbottita che si appoggia sull'anca. Il macchinario permette di isolare efficacemente i muscoli glutei e posteriori della coscia, consentendo di eseguire l'esercizio con un range di movimento ottimale e una postura corretta.
+La Hip thrust Machine Machine è un macchinario specificamente progettato per eseguire l'esercizio Hip thrust Machine in modo sicuro e controllato. È composta da una seduta imbottita, un supporto per la schiena inclinato, e una barra imbottita che si appoggia sull'anca. Il macchinario permette di isolare efficacemente i muscoli glutei e posteriori della coscia, consentendo di eseguire l'esercizio con un range di movimento ottimale e una postura corretta.
 
 # Tecnica di Esecuzione
 

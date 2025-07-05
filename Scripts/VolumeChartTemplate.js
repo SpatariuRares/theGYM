@@ -1,7 +1,7 @@
 /*
 --------------------------------------------------------------------------------
 SCRIPT: VolumeChartTemplate.js
-VERSIONE: 1.4 (17 Maggio 2025)
+VERSIONE: 1.5 (17 Maggio 2025) - Enhanced Search System
 AUTORE: Gemini & Rares
 DESCRIZIONE:
 Questo script DataviewJS genera un grafico dell'andamento del volume per un singolo
@@ -13,6 +13,14 @@ REQUISITI:
 2. Plugin Obsidian Charts (o un'altra libreria che fornisca window.renderChart)
    installato e abilitato per la visualizzazione dei grafici. In caso contrario,
    verrà mostrata una tabella di fallback.
+
+SISTEMA DI RICERCA AVANZATO:
+Lo script utilizza un sistema di ricerca intelligente che:
+- Calcola punteggi di corrispondenza tra nomi di esercizi
+- Cerca sia per nome file che per campo Esercizio nei log
+- Usa strategie multiple (field vs filename matching)
+- Supporta matching esatto e flessibile
+- Determina automaticamente la migliore strategia di ricerca
 
 COME USARLO:
 Incorporare questo script in una nota utilizzando un blocco di codice DataviewJS:
@@ -64,6 +72,10 @@ PARAMETRI DISPONIBILI (da passare nell'oggetto 'input'):
 
 - debug (Booleano, opzionale): Abilita/disabilita i messaggi di debug nella console.
     Default: false (debug disabilitato). Impostare a `true` per vedere log dettagliati.
+
+- exactMatch (Booleano, opzionale): Se attivo, richiede una corrispondenza più stringente
+    per il nome del file durante la ricerca degli esercizi.
+    Default: false. Impostare a `true` per matching più preciso.
 
 STRUTTURA DEI FILE DI LOG (nella cartella "theGYM/Log/Data"):
 -------------------------------------------------------------
@@ -137,12 +149,29 @@ ESEMPI DI UTILIZZO:
    });
    ```
 
+5. GRAFICO CON RICERCA AVANZATA E MATCHING ESATTO:
+   ```dataviewjs
+   await dv.view("theGYM/Scripts/VolumeChartTemplate", {
+       input: {
+           chartType: "exercise",
+           exercisePath: "theGYM/Esercizi/Panca Piana.md",
+           exactMatch: true, // Matching più stringente
+           debug: true, // Per vedere i dettagli della ricerca
+           title: "Panca Piana - Ricerca Avanzata"
+       }
+   });
+   ```
+
 
 --------------------------------------------------------------------------------
 */
 
+// ===================== COSTANTI E CONFIGURAZIONE =====================
+
+const PATH_MATCH_THRESHOLD = 70;
+const NO_EXERCISE_SPECIFIED = "Esercizio Non Specificato";
+
 // ===================== UTILITY FUNCTIONS =====================
-// (Raggruppate per chiarezza, con commenti)
 
 /**
  * Ottiene l'ambiente di esecuzione dello script (container, parametri, dv)
@@ -169,7 +198,7 @@ function getScriptEnvironment(inputFromView, dvGlobal) {
       : inputFromView || {};
 
   console.log(
-    "--- CARICAMENTO VolumeChartTemplate.js - VERSIONE 1.4 (17 Maggio 2025 - Enhanced) ---"
+    "--- CARICAMENTO VolumeChartTemplate.js - VERSIONE 1.5 (17 Maggio 2025 - Enhanced Search System) ---"
   );
   console.log(
     "Parametri ricevuti da dv.view (variabile 'input' grezza):",
@@ -178,6 +207,210 @@ function getScriptEnvironment(inputFromView, dvGlobal) {
   console.log("Parametri EFFETTIVI dell'utente:", userProvidedParams);
 
   return { dv: dvGlobal, params: userProvidedParams, container };
+}
+
+/**
+ * Calcola un punteggio di corrispondenza tra due stringhe (ottimizzato)
+ */
+function getMatchScore(name, searchTerm) {
+  if (!name || !searchTerm) return 0;
+
+  const nameLower = name.toLowerCase();
+  const searchLower = searchTerm.toLowerCase();
+
+  if (nameLower === searchLower) return 100;
+  if (nameLower.startsWith(searchLower + " ")) return 90;
+  if (nameLower.endsWith(" " + searchLower)) return 80;
+  if (nameLower.includes(" " + searchLower + " ")) return 70;
+  if (nameLower.includes(searchLower)) return 60;
+
+  return 0;
+}
+
+/**
+ * Analizza le pagine per trovare corrispondenze per un nome di esercizio (ottimizzato)
+ */
+function findExerciseMatches(
+  pagesToSearchIn,
+  exerciseNameToSearch,
+  dvApi,
+  debug
+) {
+  const fileNameMatchesFound = [];
+  const allExPaths = new Map(); // Usa Map per performance migliore
+
+  pagesToSearchIn.forEach((p) => {
+    if (!p || !p.file) return;
+
+    // Match per nome file
+    const fileName = p.file.name;
+    const fileMatchScore = getMatchScore(fileName, exerciseNameToSearch);
+    if (fileMatchScore > 0) {
+      fileNameMatchesFound.push({
+        page: p,
+        score: fileMatchScore,
+        name: fileName,
+      });
+    }
+
+    // Match per campo Esercizio
+    let exFieldPath = null,
+      exFieldName = null,
+      exFieldScore = 0;
+
+    if (p.Esercizio) {
+      if (p.Esercizio.path) {
+        exFieldPath = p.Esercizio.path;
+        const exPage = dvApi.page(exFieldPath);
+        exFieldName =
+          p.Esercizio.display ||
+          (exPage ? exPage.file.name : exFieldPath.split("/").pop());
+        exFieldScore = getMatchScore(
+          exPage ? exPage.file.name : exFieldName,
+          exerciseNameToSearch
+        );
+      } else if (typeof p.Esercizio === "string") {
+        exFieldName = p.Esercizio;
+        exFieldScore = getMatchScore(exFieldName, exerciseNameToSearch);
+        exFieldPath = `string:${exFieldName}`;
+      }
+    }
+
+    if (exFieldPath && exFieldName) {
+      if (!allExPaths.has(exFieldPath)) {
+        allExPaths.set(exFieldPath, { count: 0, name: exFieldName, score: 0 });
+      }
+      const info = allExPaths.get(exFieldPath);
+      info.count++;
+      if (exFieldScore > info.score) info.score = exFieldScore;
+    }
+  });
+
+  if (debug) {
+    console.log("Filename Matches:", fileNameMatchesFound);
+    console.log(
+      "Found Esercizio:: Paths/Strings & Scores:",
+      Object.fromEntries(allExPaths)
+    );
+  }
+
+  return {
+    fileNameMatches: fileNameMatchesFound,
+    allExercisePathsAndScores: Object.fromEntries(allExPaths),
+  };
+}
+
+/**
+ * Determina la migliore strategia di filtraggio (ottimizzato)
+ */
+function determineExerciseFilterStrategy(
+  fileNameMatchesArr,
+  allExercisePathsObj,
+  useExactMatch,
+  debug,
+  pathMatchThresholdConst
+) {
+  // Trova il miglior match per campo Esercizio
+  let bestPathKeyFound = null;
+  let bestPathScoreFound = -1;
+
+  Object.entries(allExercisePathsObj).forEach(([pathKey, info]) => {
+    if (info.score > bestPathScoreFound) {
+      bestPathScoreFound = info.score;
+      bestPathKeyFound = pathKey;
+    }
+  });
+
+  // Strategia campo Esercizio
+  if (bestPathKeyFound && bestPathScoreFound >= pathMatchThresholdConst) {
+    if (debug) {
+      console.log(
+        `Strategy: Use Esercizio:: field "${allExercisePathsObj[bestPathKeyFound]?.name}" (Score: ${bestPathScoreFound})`
+      );
+    }
+    return {
+      bestStrategy: "field",
+      bestPathKey: bestPathKeyFound,
+      bestFileMatchesList: [],
+    };
+  }
+
+  // Strategia nome file
+  if (fileNameMatchesArr.length > 0) {
+    fileNameMatchesArr.sort((a, b) => b.score - a.score);
+    let targetMatches = fileNameMatchesArr;
+
+    if (useExactMatch) {
+      const exactFileMatches = fileNameMatchesArr.filter((m) => m.score >= 90);
+      if (exactFileMatches.length > 0) {
+        targetMatches = exactFileMatches;
+      } else if (debug) {
+        console.log("exactMatch for filename: no matches >= 90.");
+      }
+    }
+
+    if (targetMatches.length > 0) {
+      const bestFileScore = targetMatches[0].score;
+      const bestFileMatchesFiltered = targetMatches.filter(
+        (m) => m.score === bestFileScore
+      );
+
+      if (debug) {
+        console.log(
+          `Strategy: Use Filename matching (Best Score: ${bestFileScore})`
+        );
+      }
+
+      return {
+        bestStrategy: "filename",
+        bestPathKey: null,
+        bestFileMatchesList: bestFileMatchesFiltered,
+      };
+    }
+  }
+
+  if (debug) {
+    console.log("Strategy: No suitable exercise matches found.");
+  }
+
+  return {
+    bestStrategy: "none",
+    bestPathKey: null,
+    bestFileMatchesList: [],
+  };
+}
+
+/**
+ * Filtra le pagine in base alla strategia scelta (ottimizzato)
+ */
+function filterPagesByExercise(
+  pagesToFilterFrom,
+  strategyToUse,
+  bestPathKeyForField,
+  bestFileMatchesForFilename
+) {
+  if (strategyToUse === "field" && bestPathKeyForField) {
+    return pagesToFilterFrom.filter((p) => {
+      if (!p.Esercizio) return false;
+
+      if (p.Esercizio.path) {
+        return p.Esercizio.path === bestPathKeyForField;
+      }
+
+      if (typeof p.Esercizio === "string") {
+        return `string:${p.Esercizio}` === bestPathKeyForField;
+      }
+
+      return false;
+    });
+  } else if (
+    strategyToUse === "filename" &&
+    bestFileMatchesForFilename.length > 0
+  ) {
+    return bestFileMatchesForFilename.map((m) => m.page);
+  }
+
+  return [];
 }
 
 /**
@@ -230,6 +463,7 @@ function initializeConfig(params, dv) {
   config.limitPages = params.limit;
   config.currentPagePath = dv.current()?.file?.path;
   config.logFolderPath = `"theGYM/Log/Data"`; // Make sure this path is correct for your vault
+  config.exactMatch = params.exactMatch || false; // Aggiunto per il nuovo sistema di ricerca
 
   config.chartTitle = params.title; // Will be completed later
   config.customHeight = params.height || "250px";
@@ -253,6 +487,7 @@ function fetchLogPagesAndTitle(dv, config) {
   let pages;
   let titlePrefix = "";
   let targetPath;
+  let filterMethodUsed = "N/A";
 
   if (config.chartType === "workout") {
     targetPath = config.specificWorkoutPath || config.currentPagePath;
@@ -275,6 +510,8 @@ function fetchLogPagesAndTitle(dv, config) {
       .sort((p) => p.DataOra || p.file.ctime, "asc")
       .limit(config.limitPages || 200);
 
+    filterMethodUsed = `campo Origine:: "${titlePrefix}"`;
+
     if (config.debug) {
       console.log(
         `Chart Type: Workout. Target Path: ${targetPath}. Titolo Prefix: ${titlePrefix}. Pagine di log trovate: ${pages.length}`
@@ -293,7 +530,7 @@ function fetchLogPagesAndTitle(dv, config) {
       );
     }
   } else {
-    // Default to "exercise"
+    // Default to "exercise" - USANDO IL SISTEMA AVANZATO DI RICERCA
     targetPath = config.specificExercisePath || config.currentPagePath;
     if (!targetPath) {
       throw new Error(
@@ -310,19 +547,67 @@ function fetchLogPagesAndTitle(dv, config) {
       exercisePage?.nome_esercizio ||
       exercisePage?.file?.name?.replace(/\.md$/, "") ||
       "Esercizio Corrente";
-    const exerciseName = titlePrefix.toLowerCase();
-    pages = dv
-      .pages(config.logFolderPath)
-      .where((p) => {
-        const esercizioValue = p.Esercizio?.path || p.Esercizio || "";
-        return esercizioValue.toLowerCase().includes(exerciseName);
-      })
-      .sort((p) => p.DataOra || p.file.ctime, "asc")
-      .limit(config.limitPages || 50);
+
+    const exerciseName = titlePrefix;
+
+    // Recupera tutte le pagine di log
+    const allLogPages = dv.pages(config.logFolderPath);
 
     if (config.debug) {
       console.log(
-        `Chart Type: Exercise. Target Path: ${targetPath}. Titolo Prefix: ${titlePrefix}. Metodo ricerca: Flessibile (per nome). Pagine di log trovate: ${pages.length}`
+        `Chart Type: Exercise. Target Path: ${targetPath}. Titolo Prefix: ${titlePrefix}.`
+      );
+      console.log(
+        `Totale pagine in ${config.logFolderPath}: ${allLogPages.length}`
+      );
+    }
+
+    // Usa il sistema di ricerca avanzato
+    const matchesResult = findExerciseMatches(
+      allLogPages,
+      exerciseName,
+      dv,
+      config.debug
+    );
+
+    const { bestStrategy, bestPathKey, bestFileMatchesList } =
+      determineExerciseFilterStrategy(
+        matchesResult.fileNameMatches,
+        matchesResult.allExercisePathsAndScores,
+        config.exactMatch || false,
+        config.debug,
+        PATH_MATCH_THRESHOLD
+      );
+
+    pages = filterPagesByExercise(
+      allLogPages,
+      bestStrategy,
+      bestPathKey,
+      bestFileMatchesList
+    );
+
+    // Ordina e limita i risultati
+    pages = pages
+      .sort((p) => p.DataOra || p.file.ctime, "asc")
+      .limit(config.limitPages || 50);
+
+    // Determina il metodo di filtraggio usato
+    if (bestStrategy === "field") {
+      const bestPathName =
+        matchesResult.allExercisePathsAndScores[bestPathKey]?.name ||
+        bestPathKey;
+      filterMethodUsed = `campo Esercizio:: "${bestPathName}" (score: ${matchesResult.allExercisePathsAndScores[bestPathKey]?.score})`;
+    } else if (bestStrategy === "filename") {
+      filterMethodUsed = `nome file (miglior score: ${
+        bestFileMatchesList[0]?.score || "N/D"
+      })`;
+    } else {
+      filterMethodUsed = "Nessuna corrispondenza trovata per l'esercizio";
+    }
+
+    if (config.debug) {
+      console.log(
+        `Metodo ricerca: ${filterMethodUsed}. Pagine di log trovate: ${pages.length}`
       );
       console.log(
         "Prime 3 pagine di log trovate:",
@@ -333,37 +618,6 @@ function fetchLogPagesAndTitle(dv, config) {
           esercizioField: p.Esercizio?.path || p.Esercizio || "N/A",
         }))
       );
-
-      // Debug: mostra tutte le pagine di log per confronto
-      const allLogPages = dv.pages(config.logFolderPath);
-      console.log(
-        `Totale pagine in ${config.logFolderPath}: ${allLogPages.length}`
-      );
-
-      // Debug: cerca pagine con campo Esercizio che contiene il nome dell'esercizio
-      const exerciseName = titlePrefix.toLowerCase();
-      const pagesWithExerciseField = allLogPages.where((p) => {
-        const esercizioValue = p.Esercizio?.path || p.Esercizio || "";
-        return esercizioValue.toLowerCase().includes(exerciseName);
-      });
-      console.log(
-        `Pagine con campo Esercizio che contiene "${exerciseName}": ${pagesWithExerciseField.length}`
-      );
-
-      if (pagesWithExerciseField.length > 0) {
-        console.log(
-          "Prime 3 pagine trovate con campo Esercizio:",
-          pagesWithExerciseField.slice(0, 3).map((p) => ({
-            path: p.file.path,
-            volume: p.Volume,
-            dataOra: p.DataOra,
-            esercizioField: p.Esercizio?.path || p.Esercizio || "N/A",
-          }))
-        );
-
-        // Debug: mostra la differenza tra i due metodi
-        console.log(`Pagine trovate con ricerca flessibile: ${pages.length}`);
-      }
 
       // Debug: mostra TUTTI i file che verranno usati per i calcoli
       console.log("=== FILE CHE VERRANNO USATI PER I CALCOLI ===");
@@ -380,11 +634,11 @@ function fetchLogPagesAndTitle(dv, config) {
       console.log("=== FINE FILE PER CALCOLI ===");
     } else {
       console.log(
-        `Chart Type: Exercise. Target Path: ${targetPath}. Titolo Prefix: ${titlePrefix}. Pagine di log trovate: ${pages.length}`
+        `Chart Type: Exercise. Target Path: ${targetPath}. Titolo Prefix: ${titlePrefix}. Metodo ricerca: ${filterMethodUsed}. Pagine di log trovate: ${pages.length}`
       );
     }
   }
-  return { pages, titlePrefix, targetPath };
+  return { pages, titlePrefix, targetPath, filterMethodUsed };
 }
 
 // ===================== DATA PROCESSING =====================
@@ -1053,6 +1307,7 @@ if (env) {
       pages: logPages,
       titlePrefix,
       targetPath,
+      filterMethodUsed,
     } = fetchLogPagesAndTitle(dv, config);
 
     // Rimuovi loading indicator
@@ -1167,6 +1422,26 @@ if (env) {
           `Grafico generato con successo! ${volumeData.length} sessioni elaborate.`,
           "success"
         );
+
+        // Footer informativo con metodo di ricerca
+        const infoFooterDiv = contentDiv.createEl("div");
+        Object.assign(infoFooterDiv.style, {
+          fontSize: "0.8em",
+          color: "var(--text-muted)",
+          marginTop: "10px",
+          padding: "8px",
+          backgroundColor: "var(--background-secondary)",
+          borderRadius: "4px",
+        });
+
+        let infoFooterText = `📊 ${volumeData.length} sessioni elaborate`;
+        if (config.chartType === "exercise") {
+          infoFooterText += ` per "${titlePrefix}"`;
+        } else if (config.chartType === "workout") {
+          infoFooterText += ` per l'allenamento "${titlePrefix}"`;
+        }
+        infoFooterText += `. (Metodo ricerca: ${filterMethodUsed})`;
+        infoFooterDiv.innerHTML = infoFooterText;
       }
     }
   } catch (error) {
