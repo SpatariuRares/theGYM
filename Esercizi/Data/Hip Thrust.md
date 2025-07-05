@@ -7,10 +7,9 @@ tags:
   - macchina
 ---
 
-
 # Descrizione
 
-L'Hip thrust è un attrezzo specializzato progettato per eseguire l'Hip thrust , un esercizio focalizzato principalmente sul grande gluteo. A differenza dell'Hip thrust  tradizionale con bilanciere, la versione alla macchina offre un movimento guidato e un supporto ottimale per schiena e spalle, facilitando un'esecuzione corretta e riducendo il rischio di infortuni. Questo esercizio è considerato uno dei più efficaci per lo sviluppo della forza e dell'ipertrofia dei glutei, coinvolgendo anche secondariamente i muscoli ischiocrurali (hamstring), gli adduttori e gli stabilizzatori del core. La macchina permette un'esecuzione precisa del movimento di estensione dell'anca, consentendo di utilizzare carichi significativi in sicurezza senza la necessità di preparare e posizionare bilancieri e pesi.
+L'Hip thrust è un attrezzo specializzato progettato per eseguire l'Hip thrust , un esercizio focalizzato principalmente sul grande gluteo. A differenza dell'Hip thrust tradizionale con bilanciere, la versione alla macchina offre un movimento guidato e un supporto ottimale per schiena e spalle, facilitando un'esecuzione corretta e riducendo il rischio di infortuni. Questo esercizio è considerato uno dei più efficaci per lo sviluppo della forza e dell'ipertrofia dei glutei, coinvolgendo anche secondariamente i muscoli ischiocrurali (hamstring), gli adduttori e gli stabilizzatori del core. La macchina permette un'esecuzione precisa del movimento di estensione dell'anca, consentendo di utilizzare carichi significativi in sicurezza senza la necessità di preparare e posizionare bilancieri e pesi.
 
 # Tecnica di Esecuzione
 
@@ -58,32 +57,22 @@ L'Hip thrust è un attrezzo specializzato progettato per eseguire l'Hip thrust ,
 
 # Log delle Performance
 
-```dataviewjs
-// Utilizzo corretto per Leg Press
-await dv.view("theGYM/Scripts/ExerciseLogTable", {
-    input: {
-        exercise: dv.current().nome_esercizio,
-        limit: 50,
-        searchByName: true,
-        debug: true
-    }
-});
+```workout-log
+exercise: Hip thrust
+limit: 50
+exactMatch: true
 ```
 
 ### grafico
 
-```dataviewjs
-// Definisci i parametri (opzionali)
-const input = {
-    // title: "Trend Volume Esercizio",
-    // height: "250px",
-    // showTrend: true,
-    // showStats: true,
-    // exercisePath: "theGYM/Esercizi/Panca Piana.md" // Solo se vuoi visualizzare un esercizio diverso
-};
-
-// Passa il container esplicitamente quando usi dv.view
-await dv.view("theGYM/Scripts/VolumeChartTemplate", {
-    input: input
-});
+```workout-chart
+chartType: exercise
+type: volume
+exercise: Hip thrust
+dateRange: 180
+limit: 100
+showTrendLine: true
+showTrend: true
+showStats: true
+exactMatch: true
 ```

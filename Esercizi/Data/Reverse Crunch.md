@@ -32,32 +32,22 @@ Il Reverse Crunch è un esercizio efficace per allenare la parte inferiore del r
 
 # Log delle Performance
 
-```dataviewjs
-// Utilizzo corretto per Leg Press
-await dv.view("theGYM/Scripts/ExerciseLogTable", {
-    input: {
-        exercise: dv.current().nome_esercizio,
-        limit: 50,
-        searchByName: true,
-        debug: true
-    }
-});
+```workout-log
+exercise: Reverse Crunch
+limit: 50
+exactMatch: true
 ```
 
 ### grafico
 
-```dataviewjs
-// Definisci i parametri (opzionali)
-const input = {
-    // title: "Trend Volume Esercizio",
-    // height: "250px",
-    // showTrend: true,
-    // showStats: true,
-    // exercisePath: "theGYM/Esercizi/Panca Piana.md" // Solo se vuoi visualizzare un esercizio diverso
-};
-
-// Passa il container esplicitamente quando usi dv.view
-await dv.view("theGYM/Scripts/VolumeChartTemplate", {
-    input: input
-});
+```workout-chart
+chartType: exercise
+type: volume
+exercise: Reverse Crunch
+dateRange: 180
+limit: 100
+showTrendLine: true
+showTrend: true
+showStats: true
+exactMatch: true
 ```

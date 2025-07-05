@@ -47,34 +47,24 @@ L'Hack Squat è un esercizio eseguito su una macchina specifica che permette di 
 - Assicurati che la macchina sia regolata correttamente per la tua altezza e conformazione fisica.
 - Controlla il movimento in entrambe le fasi, specialmente la discesa.
 
-# Log Esercizio
+# Log delle Performance
 
-```dataviewjs
-// Utilizzo corretto per Leg Press
-await dv.view("theGYM/Scripts/ExerciseLogTable", {
-    input: {
-        exercise: dv.current().nome_esercizio,
-        limit: 50,
-        searchByName: true,
-        debug: true
-    }
-});
+```workout-log
+exercise: Hack squat
+limit: 50
+exactMatch: true
 ```
 
 ### grafico
 
-```dataviewjs
-// Definisci i parametri (opzionali)
-const input = {
-    // title: "Trend Volume Esercizio",
-    // height: "250px",
-    // showTrend: true,
-    // showStats: true,
-    // exercisePath: "theGYM/Esercizi/Panca Piana.md" // Solo se vuoi visualizzare un esercizio diverso
-};
-
-// Passa il container esplicitamente quando usi dv.view
-await dv.view("theGYM/Scripts/VolumeChartTemplate", {
-    input: input
-});
+```workout-chart
+chartType: exercise
+type: volume
+exercise: Hack squat
+dateRange: 180
+limit: 100
+showTrendLine: true
+showTrend: true
+showStats: true
+exactMatch: true
 ```

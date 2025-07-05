@@ -35,27 +35,22 @@ La Super Inclined Chest Press è una variante della chest press eseguita su una 
 
 # Log delle Performance
 
-```dataviewjs
-// Utilizzo corretto per Leg Press
-await dv.view("theGYM/Scripts/ExerciseLogTable", {
-    input: {
-        exercise: dv.current().nome_esercizio,
-        limit: 50,
-        searchByName: true,
-        debug: true
-    }
-});
+```workout-log
+exercise: Super Inclined Chest Press
+limit: 50
+exactMatch: true
 ```
 
 ### grafico
 
-```dataviewjs
-const  input = {
-        debug: true, // ← IMPORTANTE: per vedere tutti i dettagli
-    }
-
-// Passa il container esplicitamente quando usi dv.view
-await dv.view("theGYM/Scripts/VolumeChartTemplate", {
-    input: input
-});
+```workout-chart
+chartType: exercise
+type: volume
+exercise: Super Inclined Chest Press
+dateRange: 180
+limit: 100
+showTrendLine: true
+showTrend: true
+showStats: true
+exactMatch: true
 ```
